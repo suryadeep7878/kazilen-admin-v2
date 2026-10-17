@@ -189,6 +189,8 @@ export interface AdminUser {
   full_name: string | null;
   role: string;
   is_online: number;
+  verification_status: string;
+  profile_photo: string | null;
   referral_code: string | null;
   referral_points: number;
   created_at: string | null;

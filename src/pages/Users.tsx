@@ -80,6 +80,28 @@ export default function Users() {
     }
   };
 
+  const verifyUser = async (u: AdminUser, action: "approve" | "reject") => {
+    if (!confirm(`${action === "approve" ? "Approve" : "Reject"} worker #${u.id} (${u.full_name ?? u.phone_number})?`)) return;
+    setError(null);
+    setNotice(null);
+    try {
+      await apiFetch(`/api/admin/users/${u.id}/verification`, {
+        method: "PUT",
+        body: JSON.stringify({ action }),
+      });
+      setNotice(`Worker #${u.id} ${action === "approve" ? "approved and is now live" : "rejected"}.`);
+      await load(role, offset);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    }
+  };
+
+  const verificationBadge = (status: string) => {
+    if (status === "approved") return <Badge variant="success">approved</Badge>;
+    if (status === "rejected") return <Badge variant="destructive">rejected</Badge>;
+    return <Badge variant="warning">pending</Badge>;
+  };
+
   const removeUser = async (u: AdminUser) => {
     if (!confirm(`Delete user #${u.id} (${u.full_name ?? u.phone_number})?`)) return;
     setError(null);
@@ -152,6 +174,7 @@ export default function Users() {
                   <th className="py-2 pr-3 font-bold">Name</th>
                   <th className="py-2 pr-3 font-bold">Phone</th>
                   <th className="py-2 pr-3 font-bold">Role</th>
+                  <th className="py-2 pr-3 font-bold">Verification</th>
                   <th className="py-2 pr-3 font-bold">Status</th>
                   <th className="py-2 pr-3 font-bold">Referrals</th>
                   <th className="py-2 font-bold">Actions</th>
@@ -165,13 +188,33 @@ export default function Users() {
                   >
                     <td className="py-2 pr-3 font-bold text-slate-900">#{u.id}</td>
                     <td className="py-2 pr-3 font-medium">
-                      {u.full_name ?? "-"}
+                      <span className="flex items-center gap-2">
+                        {u.profile_photo ? (
+                          <img
+                            src={u.profile_photo}
+                            alt={u.full_name ?? "Worker photo"}
+                            className="w-8 h-8 rounded-sm border border-slate-200 object-cover shrink-0"
+                          />
+                        ) : (
+                          <span className="w-8 h-8 rounded-sm bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold shrink-0">
+                            {(u.full_name ?? "W").trim().charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        {u.full_name ?? "-"}
+                      </span>
                     </td>
                     <td className="py-2 pr-3">{u.phone_number}</td>
                     <td className="py-2 pr-3">
                       <Badge variant={u.role === "worker" ? "brand" : "default"}>
                         {u.role}
                       </Badge>
+                    </td>
+                    <td className="py-2 pr-3">
+                      {u.role === "worker" ? (
+                        verificationBadge(u.verification_status ?? "approved")
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       {u.role === "worker" ? (
@@ -189,7 +232,26 @@ export default function Users() {
                     </td>
                     <td className="py-2 pr-3">{u.referral_points}</td>
                     <td className="py-2">
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {u.role === "worker" && (u.verification_status ?? "approved") === "pending" && (
+                          <>
+                            <Button
+                              size="sm"
+                              title="Approve worker (goes live in marketplace)"
+                              onClick={() => verifyUser(u, "approve")}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              title="Reject worker"
+                              onClick={() => verifyUser(u, "reject")}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
                         <Button
                           size="sm"
                           variant="secondary"
@@ -212,7 +274,7 @@ export default function Users() {
                 ))}
                 {!isLoading && users.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-4 text-center text-slate-500">
+                    <td colSpan={8} className="py-4 text-center text-slate-500">
                       No users found.
                     </td>
                   </tr>
