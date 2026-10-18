@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Star, Trash2 } from "lucide-react";
+import { Pencil, Star, Trash2, X } from "lucide-react";
 import { apiFetch, type AdminReview } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const PAGE_SIZE = 20;
 
@@ -14,6 +16,10 @@ export default function Reviews() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [editing, setEditing] = useState<AdminReview | null>(null);
+  const [editRating, setEditRating] = useState("5");
+  const [editDescription, setEditDescription] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const load = useCallback(async (page: number) => {
     setIsLoading(true);
@@ -47,6 +53,42 @@ export default function Reviews() {
       await load(offset);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  };
+
+  const openEdit = (r: AdminReview) => {
+    setEditing(r);
+    setEditRating(String(r.rating));
+    setEditDescription(r.description);
+    setError(null);
+    setNotice(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const rating = Number(editRating);
+    if (!rating || rating < 1 || rating > 5) {
+      setError("Rating must be 1-5");
+      return;
+    }
+    if (!editDescription.trim()) {
+      setError("Description cannot be empty");
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/admin/reviews/${editing.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ rating, description: editDescription.trim() }),
+      });
+      setNotice(`Review #${editing.id} updated.`);
+      setEditing(null);
+      await load(offset);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -104,9 +146,14 @@ export default function Reviews() {
                       <p className="text-[10px] text-slate-400 mt-1">{r.created_at ?? ""}</p>
                     </td>
                     <td className="py-2">
-                      <Button size="sm" variant="secondary" onClick={() => remove(r.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex gap-1.5">
+                        <Button size="sm" variant="secondary" title="Edit review" onClick={() => openEdit(r)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="secondary" title="Delete review" onClick={() => remove(r.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -134,6 +181,54 @@ export default function Reviews() {
           </div>
         </CardContent>
       </Card>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="bg-white rounded-md border border-slate-200 shadow-2xl p-5 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-slate-900">Edit review #{editing.id}</h3>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-rating">Rating (1-5)</Label>
+                <select
+                  id="edit-rating"
+                  value={editRating}
+                  onChange={(e) => setEditRating(e.target.value)}
+                  className="flex h-9 w-full bg-white border border-slate-300 text-sm font-medium text-slate-900 rounded-sm px-3 py-1.5 focus:outline-none focus:border-brand"
+                >
+                  <option value="1">1 - Poor</option>
+                  <option value="2">2 - Fair</option>
+                  <option value="3">3 - Good</option>
+                  <option value="4">4 - Very good</option>
+                  <option value="5">5 - Excellent</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-desc">Comment</Label>
+                <textarea
+                  id="edit-desc"
+                  rows={4}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="flex w-full bg-white border border-slate-300 text-sm text-slate-900 rounded-sm px-3 py-1.5 leading-relaxed focus:outline-none focus:border-brand"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(null)}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" disabled={isSaving} onClick={saveEdit}>
+                  {isSaving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

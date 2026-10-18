@@ -9,6 +9,8 @@ import {
   LogOut,
   ShieldCheck,
   Star,
+  Tag,
+  TrendingUp,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -26,6 +28,8 @@ const NAV_ITEMS = [
   { to: "/feedback", label: "Feedback", icon: BookOpenCheck, end: false },
   { to: "/membership", label: "Membership", icon: Crown, end: false },
   { to: "/referrals", label: "Refer & Earn", icon: Gift, end: false },
+  { to: "/discounts", label: "Discounts", icon: Tag, end: false },
+  { to: "/reports", label: "Reports", icon: TrendingUp, end: false },
 ];
 
 export default function Layout() {

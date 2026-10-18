@@ -131,6 +131,14 @@ export interface ReferralLeader {
   role: string;
   referral_code: string | null;
   referral_points: number;
+  referral_earnings?: number;
+}
+
+export interface ReferralConfig {
+  mode: string;
+  referrer_reward_rs: number;
+  referred_reward_rs: number;
+  is_active: boolean;
 }
 
 export interface ReferralClaim {
@@ -189,6 +197,7 @@ export interface AdminUser {
   full_name: string | null;
   role: string;
   is_online: number;
+  is_blocked?: boolean;
   verification_status: string;
   profile_photo: string | null;
   referral_code: string | null;

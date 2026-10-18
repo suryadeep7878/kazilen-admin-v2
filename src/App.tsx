@@ -5,10 +5,12 @@ import AddWorker from "@/pages/AddWorker";
 import Bookings from "@/pages/Bookings";
 import Categories from "@/pages/Categories";
 import Dashboard from "@/pages/Dashboard";
+import Discounts from "@/pages/Discounts";
 import Feedback from "@/pages/Feedback";
 import Login from "@/pages/Login";
 import Membership from "@/pages/Membership";
 import Referrals from "@/pages/Referrals";
+import Reports from "@/pages/Reports";
 import Reviews from "@/pages/Reviews";
 import Users from "@/pages/Users";
 import type { JSX } from "react";
@@ -79,6 +81,8 @@ export default function App() {
             <Route path="feedback" element={<Feedback />} />
             <Route path="membership" element={<Membership />} />
             <Route path="referrals" element={<Referrals />} />
+            <Route path="discounts" element={<Discounts />} />
+            <Route path="reports" element={<Reports />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

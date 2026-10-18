@@ -22,6 +22,9 @@ export default function Users() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pricesWorker, setPricesWorker] = useState<AdminUser | null>(null);
+  const [prices, setPrices] = useState<Array<{ id: string; price?: number; price_type?: string; price_locked?: boolean; label?: string }>>([]);
+  const [pricesLoading, setPricesLoading] = useState(false);
 
   const load = useCallback(async (roleFilter: string, page: number) => {
     setIsLoading(true);
@@ -57,6 +60,23 @@ export default function Users() {
         body: JSON.stringify({ is_online: !u.is_online }),
       });
       setNotice(`Worker #${u.id} is now ${u.is_online ? "offline" : "online"}.`);
+      await load(role, offset);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    }
+  };
+
+  const toggleBlock = async (u: AdminUser) => {
+    const willBlock = !u.is_blocked;
+    if (!confirm(`${willBlock ? "Permanently block" : "Unblock"} worker #${u.id} (${u.full_name ?? u.phone_number})?${willBlock ? " They will be hidden from customers." : ""}`)) return;
+    setError(null);
+    setNotice(null);
+    try {
+      await apiFetch(`/api/admin/users/${u.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ is_blocked: willBlock }),
+      });
+      setNotice(`Worker #${u.id} ${willBlock ? "blocked and hidden from customers" : "unblocked"}.`);
       await load(role, offset);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
@@ -112,6 +132,38 @@ export default function Users() {
       await load(role, offset);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  };
+
+  const openPrices = async (u: AdminUser) => {
+    setPricesWorker(u);
+    setPrices([]);
+    setPricesLoading(true);
+    setError(null);
+    try {
+      const data = await apiFetch<{ services: Array<{ id: string; price?: number; price_type?: string; price_locked?: boolean; label?: string }> }>(
+        `/api/admin/workers/${u.id}/services`
+      );
+      setPrices(data.services || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load prices");
+    } finally {
+      setPricesLoading(false);
+    }
+  };
+
+  const savePrices = async () => {
+    if (!pricesWorker) return;
+    setError(null);
+    try {
+      await apiFetch(`/api/admin/workers/${pricesWorker.id}/services`, {
+        method: "PUT",
+        body: JSON.stringify({ services: prices }),
+      });
+      setNotice(`Worker #${pricesWorker.id} prices updated.`);
+      setPricesWorker(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
     }
   };
 
@@ -218,14 +270,17 @@ export default function Users() {
                     </td>
                     <td className="py-2 pr-3">
                       {u.role === "worker" ? (
-                        <button
-                          title="Toggle online/offline"
-                          onClick={() => toggleOnline(u)}
-                        >
-                          <Badge variant={u.is_online ? "success" : "default"}>
-                            {u.is_online ? "online" : "offline"}
-                          </Badge>
-                        </button>
+                        <span className="flex items-center gap-1.5">
+                          <button
+                            title="Toggle online/offline"
+                            onClick={() => toggleOnline(u)}
+                          >
+                            <Badge variant={u.is_online ? "success" : "default"}>
+                              {u.is_online ? "online" : "offline"}
+                            </Badge>
+                          </button>
+                          {u.is_blocked ? <Badge variant="destructive">blocked</Badge> : null}
+                        </span>
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
@@ -249,6 +304,26 @@ export default function Users() {
                               onClick={() => verifyUser(u, "reject")}
                             >
                               Reject
+                            </Button>
+                          </>
+                        )}
+                        {u.role === "worker" && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              title="View and lock service prices"
+                              onClick={() => openPrices(u)}
+                            >
+                              Prices
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              title={u.is_blocked ? "Unblock worker" : "Permanently block worker"}
+                              onClick={() => toggleBlock(u)}
+                            >
+                              {u.is_blocked ? "Unblock" : "Block"}
                             </Button>
                           </>
                         )}
@@ -310,6 +385,69 @@ export default function Users() {
           </div>
         </CardContent>
       </Card>
+
+      {pricesWorker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="bg-white rounded-md border border-slate-200 shadow-2xl p-5 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                Service prices — #{pricesWorker.id} {pricesWorker.full_name ?? ""}
+              </h3>
+              <Button size="sm" variant="ghost" onClick={() => setPricesWorker(null)}>
+                ✕
+              </Button>
+            </div>
+            {pricesLoading ? (
+              <p className="text-xs font-semibold text-slate-500 py-3">Loading...</p>
+            ) : prices.length === 0 ? (
+              <p className="text-xs text-slate-500 py-3">No offered services yet. Worker must add services from My Services first.</p>
+            ) : (
+              <div className="space-y-2">
+                {prices.map((s, idx) => (
+                  <div key={s.id} className="flex flex-wrap items-center gap-2 bg-slate-50 border border-slate-200 rounded-sm p-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-900 truncate">{s.label ?? s.id}</p>
+                      <p className="text-[10px] text-slate-500">{s.id} · {s.price_type ?? "fixed"}</p>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={s.price ?? ""}
+                      onChange={(e) => {
+                        const next = [...prices];
+                        next[idx] = { ...next[idx], price: Number(e.target.value) || 0 };
+                        setPrices(next);
+                      }}
+                      placeholder="₹"
+                      className="w-24 h-8 bg-white border border-slate-300 text-xs font-bold text-slate-900 rounded-sm px-2 focus:outline-none focus:border-brand"
+                    />
+                    <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={!!s.price_locked}
+                        onChange={(e) => {
+                          const next = [...prices];
+                          next[idx] = { ...next[idx], price_locked: e.target.checked };
+                          setPrices(next);
+                        }}
+                      />
+                      Lock
+                    </label>
+                  </div>
+                ))}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setPricesWorker(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={savePrices}>
+                    Save prices
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

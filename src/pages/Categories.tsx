@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import {
   apiFetch,
+  getAdminToken,
   type AdminCategory,
   type AdminSubCategory,
 } from "@/lib/api";
@@ -19,6 +20,33 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 100);
 
+const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
+
+async function uploadCatalogImage(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const token = getAdminToken();
+  const res = await fetch(`${API_URL}/api/admin/catalog/upload`, {
+    method: "POST",
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    let detail = `Upload failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.detail) detail = data.detail;
+    } catch { /* keep default */ }
+    throw new Error(detail);
+  }
+  const data = await res.json();
+  // Resolve relative /static URLs against API host for preview + storage.
+  const url = String(data.url || "");
+  if (url.startsWith("/")) return `${API_URL}${url}`;
+  return url;
+}
+
 export default function Categories() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [subs, setSubs] = useState<AdminSubCategory[]>([]);
@@ -32,6 +60,7 @@ export default function Categories() {
   const [editingSub, setEditingSub] = useState<AdminSubCategory | null>(null);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showSubForm, setShowSubForm] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [catForm, setCatForm] = useState({ id: "", name: "", description: "", image: "", is_active: true });
   const [subForm, setSubForm] = useState({
@@ -454,8 +483,38 @@ export default function Categories() {
                 <Input id="cat-desc" value={catForm.description} onChange={(e) => setCatForm({ ...catForm, description: e.target.value })} placeholder="Wiring, repairs & fittings" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cat-image">Image path</Label>
-                <Input id="cat-image" value={catForm.image} onChange={(e) => setCatForm({ ...catForm, image: e.target.value })} placeholder="/categories/Electrician-service.webp" />
+                <Label htmlFor="cat-image">Image — upload from PC (JPEG/PNG/WebP → auto WebP) or paste path</Label>
+                {catForm.image && (
+                  <img src={catForm.image} alt="Category preview" className="w-20 h-20 rounded-sm border border-slate-200 object-cover" />
+                )}
+                <div className="flex items-center gap-2">
+                  <Input id="cat-image" value={catForm.image} onChange={(e) => setCatForm({ ...catForm, image: e.target.value })} placeholder="/categories/Electrician-service.webp" />
+                  <label className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold text-slate-700 rounded-sm cursor-pointer">
+                    {isUploading ? "Uploading..." : "Upload"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      disabled={isUploading}
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        setIsUploading(true);
+                        setError(null);
+                        try {
+                          const url = await uploadCatalogImage(f);
+                          setCatForm((prev) => ({ ...prev, image: url }));
+                          setNotice("Image uploaded and converted to WebP.");
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Upload failed");
+                        } finally {
+                          setIsUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                 <input type="checkbox" checked={catForm.is_active} onChange={(e) => setCatForm({ ...catForm, is_active: e.target.checked })} />
@@ -538,8 +597,38 @@ export default function Categories() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="sub-image">Image path</Label>
-                <Input id="sub-image" value={subForm.image} onChange={(e) => setSubForm({ ...subForm, image: e.target.value })} placeholder="/subcategories/fan-repair.webp" />
+                <Label htmlFor="sub-image">Image — upload from PC (JPEG/PNG/WebP → auto WebP) or paste path</Label>
+                {subForm.image && (
+                  <img src={subForm.image} alt="Sub-category preview" className="w-20 h-20 rounded-sm border border-slate-200 object-cover" />
+                )}
+                <div className="flex items-center gap-2">
+                  <Input id="sub-image" value={subForm.image} onChange={(e) => setSubForm({ ...subForm, image: e.target.value })} placeholder="/subcategories/fan-repair.webp" />
+                  <label className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold text-slate-700 rounded-sm cursor-pointer">
+                    {isUploading ? "Uploading..." : "Upload"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      disabled={isUploading}
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        setIsUploading(true);
+                        setError(null);
+                        try {
+                          const url = await uploadCatalogImage(f);
+                          setSubForm((prev) => ({ ...prev, image: url }));
+                          setNotice("Image uploaded and converted to WebP.");
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Upload failed");
+                        } finally {
+                          setIsUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                 <input type="checkbox" checked={subForm.is_active} onChange={(e) => setSubForm({ ...subForm, is_active: e.target.checked })} />
