@@ -4,6 +4,7 @@ import {
   apiFetch,
   type MembershipPlan,
   type MembershipSubscription,
+  type SubscriptionPayment,
   type WorkerQuota,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import { Label } from "@/components/ui/label";
 export default function Membership() {
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [subscriptions, setSubscriptions] = useState<MembershipSubscription[]>([]);
+  const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,12 +40,14 @@ export default function Membership() {
     setIsLoading(true);
     setError(null);
     try {
-      const [p, s] = await Promise.all([
+      const [p, s, pay] = await Promise.all([
         apiFetch<{ plans: MembershipPlan[] }>("/api/membership/admin/plans"),
         apiFetch<{ subscriptions: MembershipSubscription[] }>("/api/membership/admin/subscriptions?limit=20"),
+        apiFetch<{ payments: SubscriptionPayment[] }>("/api/payments/admin/payments?limit=20").catch(() => ({ payments: [] as SubscriptionPayment[] })),
       ]);
       setPlans(p.plans);
       setSubscriptions(s.subscriptions);
+      setPayments(pay.payments);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load membership");
     } finally {
@@ -294,7 +298,7 @@ export default function Membership() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent subscriptions</CardTitle>
+          <CardTitle>Recent subscriptions (manual + online)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -334,6 +338,57 @@ export default function Membership() {
                 {!isLoading && subscriptions.length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-4 text-center text-slate-500">No subscriptions yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {isLoading && <p className="text-xs font-semibold text-slate-500 py-3">Loading...</p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Online payments (Razorpay)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+            Read-only receipt log for worker online payments. Manual admin assignments above do not appear here.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500">
+                  <th className="py-2 pr-3 font-bold">ID</th>
+                  <th className="py-2 pr-3 font-bold">Worker</th>
+                  <th className="py-2 pr-3 font-bold">Plan</th>
+                  <th className="py-2 pr-3 font-bold">Amount</th>
+                  <th className="py-2 pr-3 font-bold">Status</th>
+                  <th className="py-2 pr-3 font-bold">Order / Payment</th>
+                  <th className="py-2 font-bold">Sub</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((pay) => (
+                  <tr key={pay.id} className="border-b border-slate-100 last:border-0 text-slate-700">
+                    <td className="py-2 pr-3 font-bold text-slate-900">#{pay.id}</td>
+                    <td className="py-2 pr-3">{pay.worker_name ?? `#${pay.worker_id}`}</td>
+                    <td className="py-2 pr-3">{pay.plan_name ?? `#${pay.plan_id}`}</td>
+                    <td className="py-2 pr-3">₹{pay.amount}</td>
+                    <td className="py-2 pr-3">
+                      <Badge variant={pay.status === "captured" ? "success" : "default"}>{pay.status}</Badge>
+                    </td>
+                    <td className="py-2 pr-3 text-[11px] text-slate-500">
+                      {pay.razorpay_order_id}
+                      {pay.razorpay_payment_id ? ` / ${pay.razorpay_payment_id}` : ""}
+                      {pay.failure_reason ? ` · ${pay.failure_reason}` : ""}
+                    </td>
+                    <td className="py-2">{pay.subscription_id ? `#${pay.subscription_id}` : "-"}</td>
+                  </tr>
+                ))}
+                {!isLoading && payments.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-4 text-center text-slate-500">No online payments yet. Manual assignments are listed above.</td>
                   </tr>
                 )}
               </tbody>

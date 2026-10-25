@@ -175,6 +175,22 @@ export interface MembershipSubscription {
   created_at: string | null;
 }
 
+export interface SubscriptionPayment {
+  id: number;
+  worker_id: number;
+  worker_name: string | null;
+  plan_id: number;
+  plan_name: string | null;
+  subscription_id: number | null;
+  amount: number;
+  currency: string;
+  razorpay_order_id: string;
+  razorpay_payment_id: string | null;
+  status: string;
+  failure_reason: string | null;
+  created_at: string | null;
+}
+
 export interface WorkerQuota {
   subscribed: boolean;
   subscription: MembershipSubscription | null;
